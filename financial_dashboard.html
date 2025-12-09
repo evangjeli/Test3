@@ -1,0 +1,807 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Executive Dashboard - Global Portfolio</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --navy: #0f172a; --blue: #1d4ed8; --teal: #0891b2; --green: #047857; --amber: #b45309; --red: #b91c1c;
+            --gray-50: #f9fafb; --gray-100: #f3f4f6; --gray-200: #e5e7eb; --gray-300: #d1d5db;
+            --gray-400: #9ca3af; --gray-500: #6b7280; --gray-600: #4b5563; --gray-700: #374151; --gray-900: #111827;
+        }
+        body { font-family: 'Inter', sans-serif; background: var(--gray-100); color: var(--gray-900); font-size: 13px; }
+        .dashboard { display: grid; grid-template-columns: 1fr 450px; grid-template-rows: auto auto 1fr; height: 100vh; }
+        
+        .header { grid-column: 1 / -1; background: var(--navy); color: white; padding: 14px 24px; display: flex; justify-content: space-between; align-items: center; }
+        .header h1 { font-size: 18px; font-weight: 600; }
+        .header-sub { font-size: 11px; opacity: 0.7; margin-top: 2px; }
+        
+        .search-bar { grid-column: 1 / -1; background: white; padding: 12px 24px; border-bottom: 1px solid var(--gray-200); display: flex; gap: 16px; align-items: center; }
+        .search-group { display: flex; align-items: center; gap: 8px; }
+        .search-group label { font-size: 12px; font-weight: 500; color: var(--gray-600); white-space: nowrap; }
+        .city-search-container { position: relative; }
+        .city-search { padding: 8px 12px; border: 1px solid var(--gray-300); border-radius: 6px; font-size: 13px; width: 180px; }
+        .city-search:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px rgba(29,78,216,0.1); }
+        .city-dropdown { position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid var(--gray-200); border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); max-height: 250px; overflow-y: auto; z-index: 1000; display: none; }
+        .city-dropdown.active { display: block; }
+        .city-option { padding: 10px 12px; cursor: pointer; display: flex; justify-content: space-between; }
+        .city-option:hover { background: var(--gray-50); }
+        
+        .ai-search-container { flex: 1; position: relative; }
+        .ai-search { width: 100%; padding: 10px 16px 10px 40px; border: 1px solid var(--gray-300); border-radius: 8px; font-size: 13px; background: var(--gray-50); }
+        .ai-search:focus { outline: none; border-color: var(--blue); background: white; box-shadow: 0 0 0 3px rgba(29,78,216,0.1); }
+        .ai-search-icon { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); font-size: 16px; }
+        
+        .ai-response { display: none; grid-column: 1 / -1; background: linear-gradient(135deg, #eff6ff 0%, #f0fdf4 100%); border-bottom: 1px solid var(--gray-200); padding: 16px 24px; }
+        .ai-response.active { display: block; }
+        .ai-response-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+        .ai-response-title { font-size: 12px; font-weight: 600; color: var(--blue); display: flex; align-items: center; gap: 6px; }
+        .ai-close { background: none; border: none; font-size: 18px; color: var(--gray-400); cursor: pointer; }
+        .ai-answer { font-size: 14px; color: var(--gray-800); line-height: 1.6; }
+        .ai-answer .highlight { background: #fef3c7; padding: 2px 6px; border-radius: 4px; font-weight: 600; }
+        .ai-answer .positive { color: var(--green); font-weight: 600; }
+        .ai-answer .negative { color: var(--red); font-weight: 600; }
+        .ai-cards { display: flex; gap: 12px; margin-top: 12px; flex-wrap: wrap; }
+        .ai-card { background: white; padding: 12px 16px; border-radius: 8px; border: 1px solid var(--gray-200); min-width: 130px; }
+        .ai-card-label { font-size: 10px; color: var(--gray-500); text-transform: uppercase; margin-bottom: 4px; }
+        .ai-card-value { font-size: 18px; font-weight: 700; color: var(--gray-900); }
+        .ai-card-value.positive { color: var(--green); }
+        .ai-card-value.negative { color: var(--red); }
+        .ai-card-sub { font-size: 11px; color: var(--gray-500); margin-top: 2px; }
+        .ai-suggestions { margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap; }
+        .ai-suggestion { background: white; border: 1px solid var(--gray-200); padding: 6px 12px; border-radius: 16px; font-size: 11px; color: var(--gray-600); cursor: pointer; }
+        .ai-suggestion:hover { border-color: var(--blue); color: var(--blue); }
+        .ai-table { width: 100%; margin-top: 12px; background: white; border-radius: 8px; overflow: hidden; border: 1px solid var(--gray-200); }
+        .ai-table th { background: var(--gray-50); padding: 8px 12px; text-align: left; font-size: 10px; font-weight: 600; color: var(--gray-600); text-transform: uppercase; }
+        .ai-table td { padding: 8px 12px; border-top: 1px solid var(--gray-100); font-size: 12px; }
+        
+        .map-container { position: relative; background: #e8f4f8; }
+        #map { width: 100%; height: 100%; }
+        
+        .sidebar { background: white; border-left: 1px solid var(--gray-200); display: flex; flex-direction: column; overflow: hidden; }
+        .tab-nav { display: flex; border-bottom: 1px solid var(--gray-200); background: var(--gray-50); }
+        .tab-btn { flex: 1; padding: 10px 6px; font-size: 10px; font-weight: 600; color: var(--gray-500); border: none; background: none; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+        .tab-btn:hover { color: var(--gray-700); }
+        .tab-btn.active { color: var(--blue); border-bottom-color: var(--blue); background: white; }
+        
+        .site-panel { flex: 1; overflow-y: auto; }
+        .site-header { padding: 16px 20px; border-bottom: 1px solid var(--gray-200); background: linear-gradient(135deg, var(--navy) 0%, #1e3a5f 100%); color: white; }
+        .site-city { font-size: 20px; font-weight: 700; margin-bottom: 2px; }
+        .site-region { font-size: 12px; opacity: 0.8; }
+        .site-status { display: inline-block; margin-top: 8px; padding: 3px 8px; border-radius: 4px; font-size: 10px; font-weight: 600; }
+        .status-excellent { background: rgba(4,120,87,0.2); color: #34d399; }
+        .status-good { background: rgba(29,78,216,0.2); color: #60a5fa; }
+        .status-fair { background: rgba(180,83,9,0.2); color: #fbbf24; }
+        .status-critical { background: rgba(185,28,28,0.2); color: #f87171; }
+        
+        .no-selection { padding: 40px 20px; text-align: center; color: var(--gray-500); }
+        .no-selection-icon { font-size: 40px; margin-bottom: 12px; }
+        .no-selection h3 { font-size: 14px; color: var(--gray-700); margin-bottom: 6px; }
+        
+        .section { padding: 14px 16px; border-bottom: 1px solid var(--gray-100); }
+        .section-title { font-size: 10px; font-weight: 600; color: var(--gray-500); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
+        .metrics-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+        .metric { background: var(--gray-50); border-radius: 6px; padding: 10px; }
+        .metric-label { font-size: 9px; color: var(--gray-500); text-transform: uppercase; margin-bottom: 3px; }
+        .metric-value { font-size: 16px; font-weight: 700; color: var(--gray-900); }
+        .metric-sub { font-size: 9px; color: var(--gray-500); margin-top: 2px; }
+        .metric-change { font-size: 9px; margin-top: 3px; font-weight: 500; }
+        .metric-change.up { color: var(--green); }
+        .metric-change.down { color: var(--red); }
+        
+        .detail-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--gray-100); font-size: 12px; }
+        .detail-row:last-child { border-bottom: none; }
+        .detail-label { color: var(--gray-600); }
+        .detail-value { font-weight: 600; color: var(--gray-900); }
+        
+        .fin-breakdown { margin-top: 8px; }
+        .fin-row { display: flex; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--gray-100); }
+        .fin-row:last-child { border-bottom: none; }
+        .fin-cat { flex: 1; font-size: 11px; color: var(--gray-700); }
+        .fin-bar-container { flex: 2; height: 8px; background: var(--gray-200); border-radius: 4px; margin: 0 10px; overflow: hidden; }
+        .fin-bar { height: 100%; border-radius: 4px; }
+        .fin-value { font-size: 11px; font-weight: 600; color: var(--gray-900); min-width: 60px; text-align: right; }
+        
+        .variance-indicator { display: inline-flex; align-items: center; gap: 4px; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 600; }
+        .variance-over { background: #fef2f2; color: var(--red); }
+        .variance-under { background: #ecfdf5; color: var(--green); }
+        .variance-on { background: var(--gray-100); color: var(--gray-600); }
+        
+        .chart-section { padding: 14px 16px; }
+        .mini-chart { height: 100px; }
+        
+        .pill { display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 9px; font-weight: 600; }
+        .pill-green { background: #ecfdf5; color: var(--green); }
+        .pill-red { background: #fef2f2; color: var(--red); }
+        .pill-amber { background: #fffbeb; color: var(--amber); }
+        .pill-blue { background: #eff6ff; color: var(--blue); }
+        
+        .map-legend { position: absolute; bottom: 20px; left: 20px; background: white; padding: 12px 16px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.15); z-index: 1000; }
+        .legend-title { font-size: 11px; font-weight: 600; color: var(--gray-700); margin-bottom: 8px; }
+        .legend-item { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--gray-600); margin-bottom: 4px; }
+        .legend-dot { width: 12px; height: 12px; border-radius: 50%; }
+        
+        .map-stats { position: absolute; top: 20px; left: 20px; right: 470px; display: flex; gap: 10px; z-index: 1000; flex-wrap: wrap; }
+        .map-stat { background: white; padding: 8px 12px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.15); }
+        .map-stat-label { font-size: 9px; color: var(--gray-500); text-transform: uppercase; }
+        .map-stat-value { font-size: 14px; font-weight: 700; color: var(--gray-900); }
+        .map-stat-sub { font-size: 9px; color: var(--gray-500); }
+        
+        .custom-marker { display: flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 50%; color: white; font-weight: 700; font-size: 10px; box-shadow: 0 2px 6px rgba(0,0,0,0.3); cursor: pointer; transition: transform 0.2s; }
+        .custom-marker:hover { transform: scale(1.2); }
+        .marker-excellent { background: var(--green); }
+        .marker-good { background: var(--blue); }
+        .marker-fair { background: var(--amber); }
+        .marker-critical { background: var(--red); }
+        .marker-selected { transform: scale(1.3); box-shadow: 0 0 0 4px rgba(29,78,216,0.4); }
+        
+        .location-list { max-height: 100%; overflow-y: auto; }
+        .location-item { display: flex; align-items: center; gap: 10px; padding: 10px 16px; border-bottom: 1px solid var(--gray-100); cursor: pointer; }
+        .location-item:hover { background: var(--gray-50); }
+        .location-item.active { background: #eff6ff; border-left: 3px solid var(--blue); }
+        .location-dot { width: 8px; height: 8px; border-radius: 50%; }
+        .location-info { flex: 1; }
+        .location-name { font-weight: 600; font-size: 12px; }
+        .location-region { font-size: 10px; color: var(--gray-500); }
+        .location-rate { font-weight: 600; font-size: 12px; }
+        
+        .example-queries { padding: 16px; background: var(--gray-50); }
+        .example-title { font-size: 10px; font-weight: 600; color: var(--gray-500); margin-bottom: 8px; }
+        .example-list { display: flex; flex-direction: column; gap: 4px; }
+        .example-query { font-size: 11px; color: var(--blue); cursor: pointer; padding: 6px 10px; background: white; border-radius: 6px; border: 1px solid var(--gray-200); }
+        .example-query:hover { background: #eff6ff; border-color: var(--blue); }
+        
+        .quick-fin { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 10px; }
+        .quick-fin-card { background: white; border: 1px solid var(--gray-200); border-radius: 6px; padding: 8px 10px; text-align: center; }
+        .quick-fin-label { font-size: 9px; color: var(--gray-500); text-transform: uppercase; }
+        .quick-fin-value { font-size: 14px; font-weight: 700; margin-top: 2px; }
+    </style>
+</head>
+<body>
+    <div class="dashboard">
+        <div class="header">
+            <div>
+                <h1>🌍 Global Workplace Portfolio</h1>
+                <div class="header-sub">Financial & Operational Analytics</div>
+            </div>
+            <div style="font-size: 11px; text-align: right;">
+                <div style="opacity: 0.6;">FY 2025 • LAST UPDATED</div>
+                <div>November 25, 2025</div>
+            </div>
+        </div>
+        
+        <div class="search-bar">
+            <div class="search-group">
+                <label>📍</label>
+                <div class="city-search-container">
+                    <input type="text" class="city-search" id="citySearch" placeholder="Search cities..." autocomplete="off">
+                    <div class="city-dropdown" id="cityDropdown"></div>
+                </div>
+            </div>
+            <div class="ai-search-container">
+                <span class="ai-search-icon">🔍</span>
+                <input type="text" class="ai-search" id="aiSearch" placeholder="Ask anything... 'budget variance for Tokyo', 'show over budget locations', 'total CAM costs'" autocomplete="off">
+            </div>
+        </div>
+        
+        <div class="ai-response" id="aiResponse">
+            <div class="ai-response-header">
+                <div class="ai-response-title">✨ Answer</div>
+                <button class="ai-close" onclick="closeAiResponse()">×</button>
+            </div>
+            <div class="ai-answer" id="aiAnswer"></div>
+        </div>
+        
+        <div class="map-container">
+            <div id="map"></div>
+            <div class="map-stats">
+                <div class="map-stat"><div class="map-stat-label">Portfolio</div><div class="map-stat-value">$195M</div><div class="map-stat-sub">Annual Cost</div></div>
+                <div class="map-stat"><div class="map-stat-label">Variance</div><div class="map-stat-value" style="color:var(--red)">+$4.9M</div><div class="map-stat-sub">vs Plan</div></div>
+                <div class="map-stat"><div class="map-stat-label">Headcount</div><div class="map-stat-value">4,855</div><div class="map-stat-sub">Employees</div></div>
+                <div class="map-stat"><div class="map-stat-label">Attendance</div><div class="map-stat-value">59.5%</div><div class="map-stat-sub">Avg Rate</div></div>
+                <div class="map-stat"><div class="map-stat-label">Cost/Emp</div><div class="map-stat-value">$40.2K</div><div class="map-stat-sub">Annual</div></div>
+            </div>
+            <div class="map-legend">
+                <div class="legend-title">Budget Status</div>
+                <div class="legend-item"><div class="legend-dot" style="background: var(--green);"></div> Under Budget</div>
+                <div class="legend-item"><div class="legend-dot" style="background: var(--blue);"></div> On Budget (±2%)</div>
+                <div class="legend-item"><div class="legend-dot" style="background: var(--amber);"></div> Over 2-5%</div>
+                <div class="legend-item"><div class="legend-dot" style="background: var(--red);"></div> Over >5%</div>
+            </div>
+        </div>
+        
+        <div class="sidebar">
+            <div class="tab-nav">
+                <button class="tab-btn active" onclick="showSidebarTab('details')">📍 Details</button>
+                <button class="tab-btn" onclick="showSidebarTab('finance')">💰 Finance</button>
+                <button class="tab-btn" onclick="showSidebarTab('list')">📋 List</button>
+            </div>
+            
+            <div id="details-tab" class="site-panel">
+                <div id="site-content">
+                    <div class="no-selection">
+                        <div class="no-selection-icon">💰</div>
+                        <h3>Financial Dashboard</h3>
+                        <p style="font-size:11px;">Select a location or ask a question</p>
+                    </div>
+                    <div class="example-queries">
+                        <div class="example-title">💡 Try asking:</div>
+                        <div class="example-list">
+                            <div class="example-query" onclick="runQuery('Budget variance for Tokyo')">Budget variance for Tokyo</div>
+                            <div class="example-query" onclick="runQuery('Show over budget locations')">Show over budget locations</div>
+                            <div class="example-query" onclick="runQuery('Total rent costs')">Total rent costs</div>
+                            <div class="example-query" onclick="runQuery('CAM costs by region')">CAM costs by region</div>
+                            <div class="example-query" onclick="runQuery('Cost per employee ranking')">Cost per employee ranking</div>
+                            <div class="example-query" onclick="runQuery('YoY cost change')">Year-over-year cost change</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="finance-tab" class="site-panel" style="display:none;">
+                <div class="section">
+                    <div class="section-title">💰 Portfolio Financial Summary</div>
+                    <div class="quick-fin">
+                        <div class="quick-fin-card"><div class="quick-fin-label">Forecast</div><div class="quick-fin-value">$195M</div></div>
+                        <div class="quick-fin-card"><div class="quick-fin-label">Plan</div><div class="quick-fin-value">$190M</div></div>
+                        <div class="quick-fin-card"><div class="quick-fin-label">Variance</div><div class="quick-fin-value" style="color:var(--red)">+$4.9M</div></div>
+                    </div>
+                </div>
+                <div class="section">
+                    <div class="section-title">📊 Cost Breakdown</div>
+                    <div class="fin-breakdown" id="globalCostBreakdown"></div>
+                </div>
+                <div class="section">
+                    <div class="section-title">📈 Regional Variance</div>
+                    <div id="regionalVariance"></div>
+                </div>
+                <div class="chart-section">
+                    <div class="section-title">📉 Monthly Trend</div>
+                    <div class="mini-chart"><canvas id="globalTrendChart"></canvas></div>
+                </div>
+            </div>
+            
+            <div id="list-tab" class="site-panel" style="display:none;">
+                <div class="location-list" id="location-list"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    // Enhanced Portfolio Data with Financial Details
+    const locations = [
+        {id:1,city:'Santa Monica',region:'US West',lat:34.0195,lng:-118.4912,headcount:1110,attendance:500,rate:45.0,sqft:900000,
+         forecast:36675000,plan:35200000,priorYear:34100000,
+         rent:30350000,cam:1467000,tax:1834000,parking:1100000,other:1924000,
+         food:12.50,leaseEnd:'2027-06-30'},
+        {id:2,city:'Bellevue',region:'US West',lat:47.6101,lng:-122.2015,headcount:90,attendance:50,rate:55.6,sqft:75000,
+         forecast:5718000,plan:5500000,priorYear:5200000,
+         rent:4730000,cam:229000,tax:286000,parking:172000,other:301000,
+         food:14.20,leaseEnd:'2026-12-31'},
+        {id:3,city:'New York',region:'US East',lat:40.7128,lng:-74.0060,headcount:25,attendance:12,rate:48.0,sqft:1000,
+         forecast:2934000,plan:2800000,priorYear:2650000,
+         rent:2428000,cam:117000,tax:147000,parking:88000,other:154000,
+         food:18.00,leaseEnd:'2026-09-30'},
+        {id:4,city:'Boston',region:'US East',lat:42.3601,lng:-71.0589,headcount:221,attendance:120,rate:54.3,sqft:111048,
+         forecast:14486000,plan:14000000,priorYear:13200000,
+         rent:11990000,cam:579000,tax:724000,parking:435000,other:758000,
+         food:13.80,leaseEnd:'2027-03-31'},
+        {id:5,city:'Miami',region:'US East',lat:25.7617,lng:-80.1918,headcount:150,attendance:77,rate:51.3,sqft:26140,
+         forecast:2766000,plan:2900000,priorYear:2700000,
+         rent:2289000,cam:111000,tax:138000,parking:83000,other:145000,
+         food:11.50,leaseEnd:'2026-08-31'},
+        {id:6,city:'Austin',region:'US Central',lat:30.2672,lng:-97.7431,headcount:60,attendance:32,rate:53.3,sqft:27296,
+         forecast:1783000,plan:1750000,priorYear:1650000,
+         rent:1475000,cam:71000,tax:89000,parking:54000,other:94000,
+         food:10.20,leaseEnd:'2027-01-31'},
+        {id:7,city:'Denver',region:'US Central',lat:39.7392,lng:-104.9903,headcount:68,attendance:38,rate:55.9,sqft:22082,
+         forecast:1354000,plan:1400000,priorYear:1300000,
+         rent:1121000,cam:54000,tax:68000,parking:41000,other:70000,
+         food:11.00,leaseEnd:'2026-11-30'},
+        {id:8,city:'Chicago',region:'US Central',lat:41.8781,lng:-87.6298,headcount:294,attendance:146,rate:49.7,sqft:88434,
+         forecast:6150000,plan:5800000,priorYear:5500000,
+         rent:5090000,cam:246000,tax:307000,parking:185000,other:322000,
+         food:12.30,leaseEnd:'2027-05-31'},
+        {id:9,city:'Toronto',region:'Americas',lat:43.6532,lng:-79.3832,headcount:281,attendance:140,rate:49.8,sqft:148563,
+         forecast:6869000,plan:6500000,priorYear:6100000,
+         rent:5685000,cam:275000,tax:343000,parking:206000,other:360000,
+         food:13.50,leaseEnd:'2027-03-15'},
+        {id:10,city:'Vancouver',region:'Americas',lat:49.2827,lng:-123.1207,headcount:72,attendance:35,rate:48.6,sqft:34446,
+         forecast:4213000,plan:4000000,priorYear:3800000,
+         rent:3486000,cam:168000,tax:210000,parking:126000,other:223000,
+         food:14.80,leaseEnd:'2026-10-31'},
+        {id:11,city:'Mexico City',region:'Americas',lat:19.4326,lng:-99.1332,headcount:88,attendance:48,rate:54.5,sqft:20425,
+         forecast:654000,plan:700000,priorYear:620000,
+         rent:541000,cam:26000,tax:33000,parking:20000,other:34000,
+         food:6.50,leaseEnd:'2027-02-28'},
+        {id:12,city:'Sao Paulo',region:'Americas',lat:-23.5505,lng:-46.6333,headcount:78,attendance:42,rate:53.8,sqft:42298,
+         forecast:1227000,plan:1300000,priorYear:1150000,
+         rent:1015000,cam:49000,tax:61000,parking:37000,other:65000,
+         food:7.20,leaseEnd:'2026-12-15'},
+        {id:13,city:'London',region:'Europe',lat:51.5074,lng:-0.1278,headcount:108,attendance:59,rate:54.6,sqft:35000,
+         forecast:4401000,plan:4200000,priorYear:4000000,
+         rent:3642000,cam:176000,tax:220000,parking:132000,other:231000,
+         food:15.60,leaseEnd:'2026-01-31'},
+        {id:14,city:'Paris',region:'Europe',lat:48.8566,lng:2.3522,headcount:270,attendance:168,rate:62.2,sqft:119118,
+         forecast:13801000,plan:13500000,priorYear:12800000,
+         rent:11425000,cam:552000,tax:690000,parking:414000,other:720000,
+         food:16.20,leaseEnd:'2026-11-15'},
+        {id:15,city:'Berlin',region:'Europe',lat:52.5200,lng:13.4050,headcount:218,attendance:130,rate:59.6,sqft:87156,
+         forecast:7070000,plan:7200000,priorYear:6700000,
+         rent:5852000,cam:283000,tax:353000,parking:212000,other:370000,
+         food:12.80,leaseEnd:'2026-06-30'},
+        {id:16,city:'Amsterdam',region:'Europe',lat:52.3676,lng:4.9041,headcount:80,attendance:41,rate:51.2,sqft:42541,
+         forecast:5302000,plan:5100000,priorYear:4800000,
+         rent:4388000,cam:212000,tax:265000,parking:159000,other:278000,
+         food:14.50,leaseEnd:'2027-04-30'},
+        {id:17,city:'Dublin',region:'Europe',lat:53.3498,lng:-6.2603,headcount:70,attendance:38,rate:54.3,sqft:22847,
+         forecast:2706000,plan:2600000,priorYear:2450000,
+         rent:2240000,cam:108000,tax:135000,parking:81000,other:142000,
+         food:13.90,leaseEnd:'2026-09-15'},
+        {id:18,city:'Madrid',region:'Europe',lat:40.4168,lng:-3.7038,headcount:88,attendance:48,rate:54.5,sqft:55142,
+         forecast:2738000,plan:2800000,priorYear:2600000,
+         rent:2266000,cam:110000,tax:137000,parking:82000,other:143000,
+         food:11.20,leaseEnd:'2027-01-15'},
+        {id:19,city:'Singapore',region:'APAC',lat:1.3521,lng:103.8198,headcount:100,attendance:85,rate:85.0,sqft:45000,
+         forecast:7335000,plan:7000000,priorYear:6500000,
+         rent:6071000,cam:293000,tax:367000,parking:220000,other:384000,
+         food:10.80,leaseEnd:'2026-03-15'},
+        {id:20,city:'Tokyo',region:'APAC',lat:35.6762,lng:139.6503,headcount:227,attendance:196,rate:86.3,sqft:124615,
+         forecast:24366000,plan:23000000,priorYear:21500000,
+         rent:20167000,cam:974000,tax:1218000,parking:731000,other:1276000,
+         food:14.20,leaseEnd:'2025-12-15'},
+        {id:21,city:'Sydney',region:'APAC',lat:-33.8688,lng:151.2093,headcount:301,attendance:236,rate:78.4,sqft:147357,
+         forecast:14917000,plan:14500000,priorYear:13800000,
+         rent:12347000,cam:596000,tax:746000,parking:447000,other:781000,
+         food:13.40,leaseEnd:'2026-09-01'},
+        {id:22,city:'Hong Kong',region:'APAC',lat:22.3193,lng:114.1694,headcount:77,attendance:66,rate:85.7,sqft:57837,
+         forecast:11932000,plan:11500000,priorYear:10800000,
+         rent:9876000,cam:477000,tax:596000,parking:358000,other:625000,
+         food:12.60,leaseEnd:'2027-06-30'},
+        {id:23,city:'Mumbai',region:'APAC',lat:19.0760,lng:72.8777,headcount:83,attendance:60,rate:72.3,sqft:34935,
+         forecast:1258000,plan:1200000,priorYear:1100000,
+         rent:1041000,cam:50000,tax:63000,parking:38000,other:66000,
+         food:5.80,leaseEnd:'2026-08-15'},
+        {id:24,city:'Bangalore',region:'APAC',lat:12.9716,lng:77.5946,headcount:290,attendance:205,rate:70.7,sqft:85458,
+         forecast:1614000,plan:1550000,priorYear:1400000,
+         rent:1336000,cam:65000,tax:81000,parking:48000,other:84000,
+         food:5.20,leaseEnd:'2027-02-28'},
+        {id:25,city:'Seoul',region:'APAC',lat:37.5665,lng:126.9780,headcount:406,attendance:314,rate:77.3,sqft:124823,
+         forecast:13174000,plan:12800000,priorYear:12000000,
+         rent:10904000,cam:527000,tax:658000,parking:395000,other:690000,
+         food:9.80,leaseEnd:'2027-01-31'}
+    ];
+    
+    // Add calculated fields
+    locations.forEach(loc => {
+        loc.variance = loc.forecast - loc.plan;
+        loc.variancePct = (loc.variance / loc.plan * 100);
+        loc.yoyChange = loc.forecast - loc.priorYear;
+        loc.yoyPct = (loc.yoyChange / loc.priorYear * 100);
+        loc.costPerSqft = loc.forecast / loc.sqft;
+        loc.costPerEmployee = loc.forecast / loc.headcount;
+    });
+    
+    const globalFinancials = {
+        categories: [
+            {name: 'Rent', forecast: 161427000, plan: 158255000, pct: 82.8, color: '#1d4ed8'},
+            {name: 'CAM', forecast: 7421000, plan: 8270000, pct: 3.8, color: '#0891b2'},
+            {name: 'Real Estate Tax', forecast: 6270000, plan: 6269000, pct: 3.2, color: '#7c3aed'},
+            {name: 'Parking', forecast: 5123000, plan: 5421000, pct: 2.6, color: '#059669'},
+            {name: 'Other', forecast: 14776000, plan: 15444000, pct: 7.6, color: '#6b7280'}
+        ]
+    };
+    
+    let map, markers = {}, selectedLocation = null;
+    
+    document.addEventListener('DOMContentLoaded', () => {
+        initMap();
+        initSearch();
+        populateLocationList();
+        initFinanceTab();
+    });
+    
+    function initMap() {
+        map = L.map('map', { center: [20, 0], zoom: 2, minZoom: 2, maxZoom: 10 });
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', { attribution: '©OpenStreetMap' }).addTo(map);
+        
+        locations.forEach(loc => {
+            const status = getBudgetStatus(loc.variancePct);
+            const icon = L.divIcon({
+                html: `<div class="custom-marker marker-${status.class}" data-id="${loc.id}">${loc.variancePct > 0 ? '+' : ''}${loc.variancePct.toFixed(0)}%</div>`,
+                className: '', iconSize: [30, 30], iconAnchor: [15, 15]
+            });
+            markers[loc.id] = L.marker([loc.lat, loc.lng], { icon }).addTo(map).on('click', () => selectLocation(loc.id));
+        });
+    }
+    
+    function getBudgetStatus(variancePct) {
+        if (variancePct <= -2) return { class: 'excellent', text: 'Under Budget', color: 'var(--green)' };
+        if (variancePct <= 2) return { class: 'good', text: 'On Budget', color: 'var(--blue)' };
+        if (variancePct <= 5) return { class: 'fair', text: 'Over Budget', color: 'var(--amber)' };
+        return { class: 'critical', text: 'Significantly Over', color: 'var(--red)' };
+    }
+    
+    function getAttendanceStatus(rate) {
+        if (rate >= 70) return { class: 'excellent', text: 'Excellent', color: 'var(--green)' };
+        if (rate >= 60) return { class: 'good', text: 'Good', color: 'var(--blue)' };
+        if (rate >= 50) return { class: 'fair', text: 'Fair', color: 'var(--amber)' };
+        return { class: 'critical', text: 'Critical', color: 'var(--red)' };
+    }
+    
+    function selectLocation(id) {
+        const loc = locations.find(l => l.id === id);
+        if (!loc) return;
+        
+        if (selectedLocation) {
+            const prev = markers[selectedLocation]?.getElement()?.querySelector('.custom-marker');
+            if (prev) prev.classList.remove('marker-selected');
+        }
+        selectedLocation = id;
+        const curr = markers[id]?.getElement()?.querySelector('.custom-marker');
+        if (curr) curr.classList.add('marker-selected');
+        
+        map.flyTo([loc.lat, loc.lng], 5, { duration: 1 });
+        updateSiteDetails(loc);
+        document.querySelectorAll('.location-item').forEach(item => item.classList.toggle('active', item.dataset.id == id));
+        showSidebarTab('details');
+    }
+    
+    function initSearch() {
+        const cityInput = document.getElementById('citySearch');
+        const dropdown = document.getElementById('cityDropdown');
+        cityInput.addEventListener('focus', () => showCityDropdown(''));
+        cityInput.addEventListener('input', (e) => showCityDropdown(e.target.value));
+        cityInput.addEventListener('blur', () => setTimeout(() => dropdown.classList.remove('active'), 200));
+        
+        document.getElementById('aiSearch').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') processQuery(e.target.value);
+        });
+    }
+    
+    function showCityDropdown(filter) {
+        const dropdown = document.getElementById('cityDropdown');
+        const filtered = locations.filter(l => l.city.toLowerCase().includes(filter.toLowerCase()) || l.region.toLowerCase().includes(filter.toLowerCase())).sort((a,b) => a.city.localeCompare(b.city));
+        dropdown.innerHTML = filtered.map(l => `<div class="city-option" onclick="selectCity(${l.id})"><span>${l.city}</span><span style="font-size:10px;color:var(--gray-500)">${l.region}</span></div>`).join('');
+        dropdown.classList.add('active');
+    }
+    
+    function selectCity(id) {
+        document.getElementById('citySearch').value = locations.find(l => l.id === id).city;
+        document.getElementById('cityDropdown').classList.remove('active');
+        selectLocation(id);
+    }
+    
+    function runQuery(q) { document.getElementById('aiSearch').value = q; processQuery(q); }
+    
+    function processQuery(query) {
+        const q = query.toLowerCase().trim();
+        if (!q) return;
+        
+        let response = { answer: '', cards: [], suggestions: [], table: null };
+        const cityMatch = locations.find(l => q.includes(l.city.toLowerCase()));
+        const regionMatch = ['apac', 'europe', 'us west', 'us east', 'us central', 'americas'].find(r => q.includes(r));
+        
+        // Budget/Variance queries
+        if ((q.includes('budget') || q.includes('variance')) && cityMatch) {
+            const status = getBudgetStatus(cityMatch.variancePct);
+            response = {
+                answer: `<strong>${cityMatch.city}</strong> is <span class="${cityMatch.variance > 0 ? 'negative' : 'positive'}">${cityMatch.variance > 0 ? 'over' : 'under'} budget by $${Math.abs(cityMatch.variance/1e6).toFixed(2)}M</span> (${cityMatch.variancePct > 0 ? '+' : ''}${cityMatch.variancePct.toFixed(1)}%).`,
+                cards: [
+                    { label: 'Forecast', value: `$${(cityMatch.forecast/1e6).toFixed(1)}M`, sub: 'FY25' },
+                    { label: 'Plan', value: `$${(cityMatch.plan/1e6).toFixed(1)}M`, sub: 'Budget' },
+                    { label: 'Variance', value: `${cityMatch.variance > 0 ? '+' : ''}$${(cityMatch.variance/1e6).toFixed(2)}M`, sub: status.text, valueClass: cityMatch.variance > 0 ? 'negative' : 'positive' },
+                    { label: 'Prior Year', value: `$${(cityMatch.priorYear/1e6).toFixed(1)}M`, sub: `${cityMatch.yoyPct > 0 ? '+' : ''}${cityMatch.yoyPct.toFixed(1)}% YoY` }
+                ],
+                suggestions: [`Cost breakdown ${cityMatch.city}`, `${cityMatch.city} rent costs`, 'Show over budget locations']
+            };
+            selectLocation(cityMatch.id);
+        }
+        // Over budget locations
+        else if (q.includes('over budget') || q.includes('over-budget')) {
+            const overBudget = locations.filter(l => l.variancePct > 2).sort((a,b) => b.variancePct - a.variancePct);
+            const totalOver = overBudget.reduce((s,l) => s + l.variance, 0);
+            response = {
+                answer: `<strong>${overBudget.length} locations</strong> are over budget by more than 2%, totaling <span class="negative">+$${(totalOver/1e6).toFixed(1)}M</span> in excess costs.`,
+                cards: [
+                    { label: 'Locations Over', value: overBudget.length, sub: 'of 25' },
+                    { label: 'Total Excess', value: `+$${(totalOver/1e6).toFixed(1)}M`, sub: 'vs Plan', valueClass: 'negative' },
+                    { label: 'Worst', value: overBudget[0]?.city, sub: `+${overBudget[0]?.variancePct.toFixed(1)}%` }
+                ],
+                table: { headers: ['Location', 'Variance', '%'], rows: overBudget.slice(0,6).map(l => [l.city, `+$${(l.variance/1e6).toFixed(2)}M`, `+${l.variancePct.toFixed(1)}%`]) },
+                suggestions: ['Under budget locations', 'Highest variance', 'Total portfolio variance']
+            };
+        }
+        // Under budget locations
+        else if (q.includes('under budget') || q.includes('under-budget') || q.includes('savings')) {
+            const underBudget = locations.filter(l => l.variancePct < -1).sort((a,b) => a.variancePct - b.variancePct);
+            const totalSavings = Math.abs(underBudget.reduce((s,l) => s + l.variance, 0));
+            response = {
+                answer: `<strong>${underBudget.length} locations</strong> are under budget, generating <span class="positive">$${(totalSavings/1e6).toFixed(1)}M</span> in savings.`,
+                cards: [
+                    { label: 'Locations Under', value: underBudget.length, sub: 'of 25' },
+                    { label: 'Total Savings', value: `$${(totalSavings/1e6).toFixed(1)}M`, sub: 'vs Plan', valueClass: 'positive' },
+                    { label: 'Best', value: underBudget[0]?.city, sub: `${underBudget[0]?.variancePct.toFixed(1)}%` }
+                ],
+                table: { headers: ['Location', 'Savings', '%'], rows: underBudget.slice(0,5).map(l => [l.city, `$${(Math.abs(l.variance)/1e6).toFixed(2)}M`, `${l.variancePct.toFixed(1)}%`]) },
+                suggestions: ['Over budget locations', 'Best performing region']
+            };
+        }
+        // Cost breakdown for city
+        else if ((q.includes('breakdown') || q.includes('cost') && q.includes('detail')) && cityMatch) {
+            response = {
+                answer: `Cost breakdown for <strong>${cityMatch.city}</strong> (Total: $${(cityMatch.forecast/1e6).toFixed(2)}M):`,
+                cards: [
+                    { label: 'Rent', value: `$${(cityMatch.rent/1e6).toFixed(2)}M`, sub: `${(cityMatch.rent/cityMatch.forecast*100).toFixed(0)}%` },
+                    { label: 'CAM', value: `$${(cityMatch.cam/1e3).toFixed(0)}K`, sub: `${(cityMatch.cam/cityMatch.forecast*100).toFixed(1)}%` },
+                    { label: 'Tax', value: `$${(cityMatch.tax/1e3).toFixed(0)}K`, sub: `${(cityMatch.tax/cityMatch.forecast*100).toFixed(1)}%` },
+                    { label: 'Parking', value: `$${(cityMatch.parking/1e3).toFixed(0)}K`, sub: `${(cityMatch.parking/cityMatch.forecast*100).toFixed(1)}%` },
+                    { label: 'Other', value: `$${(cityMatch.other/1e3).toFixed(0)}K`, sub: `${(cityMatch.other/cityMatch.forecast*100).toFixed(1)}%` }
+                ],
+                suggestions: [`Budget variance ${cityMatch.city}`, `${cityMatch.city} YoY change`]
+            };
+            selectLocation(cityMatch.id);
+        }
+        // Total rent costs
+        else if (q.includes('rent') && (q.includes('total') || !cityMatch)) {
+            const totalRent = locations.reduce((s,l) => s + l.rent, 0);
+            const topRent = [...locations].sort((a,b) => b.rent - a.rent).slice(0,5);
+            response = {
+                answer: `Total rent across portfolio is <span class="highlight">$${(totalRent/1e6).toFixed(1)}M</span> (82.8% of total costs).`,
+                cards: [
+                    { label: 'Total Rent', value: `$${(totalRent/1e6).toFixed(0)}M`, sub: 'Annual' },
+                    { label: '% of Costs', value: '82.8%', sub: 'Largest category' },
+                    { label: 'Highest', value: topRent[0].city, sub: `$${(topRent[0].rent/1e6).toFixed(1)}M` }
+                ],
+                table: { headers: ['Location', 'Rent', '% of Total'], rows: topRent.map(l => [l.city, `$${(l.rent/1e6).toFixed(1)}M`, `${(l.rent/totalRent*100).toFixed(1)}%`]) },
+                suggestions: ['CAM costs', 'Tax costs', 'Parking costs']
+            };
+        }
+        // Rent for specific city
+        else if (q.includes('rent') && cityMatch) {
+            response = {
+                answer: `Annual rent for <strong>${cityMatch.city}</strong> is <span class="highlight">$${(cityMatch.rent/1e6).toFixed(2)}M</span> (${(cityMatch.rent/cityMatch.forecast*100).toFixed(0)}% of location costs).`,
+                cards: [
+                    { label: 'Annual Rent', value: `$${(cityMatch.rent/1e6).toFixed(2)}M`, sub: cityMatch.city },
+                    { label: 'Rent/Sq Ft', value: `$${(cityMatch.rent/cityMatch.sqft).toFixed(2)}`, sub: 'Per sq ft' },
+                    { label: 'Square Feet', value: `${(cityMatch.sqft/1000).toFixed(0)}K`, sub: 'Total space' }
+                ],
+                suggestions: [`Full cost breakdown ${cityMatch.city}`, `Budget variance ${cityMatch.city}`]
+            };
+            selectLocation(cityMatch.id);
+        }
+        // CAM costs
+        else if (q.includes('cam')) {
+            const totalCAM = locations.reduce((s,l) => s + l.cam, 0);
+            const planCAM = globalFinancials.categories.find(c => c.name === 'CAM').plan;
+            response = {
+                answer: `Total CAM costs are <span class="highlight">$${(totalCAM/1e6).toFixed(1)}M</span>, which is <span class="positive">$${((planCAM-totalCAM)/1e6).toFixed(1)}M under budget</span>.`,
+                cards: [
+                    { label: 'CAM Forecast', value: `$${(totalCAM/1e6).toFixed(1)}M`, sub: 'Annual' },
+                    { label: 'CAM Plan', value: `$${(planCAM/1e6).toFixed(1)}M`, sub: 'Budget' },
+                    { label: 'Variance', value: `-$${((planCAM-totalCAM)/1e6).toFixed(1)}M`, sub: 'Under budget', valueClass: 'positive' }
+                ],
+                suggestions: ['Rent costs', 'Tax costs', 'All cost categories']
+            };
+        }
+        // YoY change
+        else if (q.includes('yoy') || q.includes('year over year') || q.includes('year-over-year')) {
+            const totalForecast = locations.reduce((s,l) => s + l.forecast, 0);
+            const totalPrior = locations.reduce((s,l) => s + l.priorYear, 0);
+            const yoyChange = totalForecast - totalPrior;
+            const yoyPct = (yoyChange / totalPrior * 100);
+            const biggest = [...locations].sort((a,b) => b.yoyPct - a.yoyPct).slice(0,5);
+            response = {
+                answer: `Portfolio costs increased <span class="negative">$${(yoyChange/1e6).toFixed(1)}M (+${yoyPct.toFixed(1)}%)</span> year-over-year.`,
+                cards: [
+                    { label: 'FY25 Forecast', value: `$${(totalForecast/1e6).toFixed(0)}M`, sub: 'Current' },
+                    { label: 'FY24 Actual', value: `$${(totalPrior/1e6).toFixed(0)}M`, sub: 'Prior Year' },
+                    { label: 'YoY Change', value: `+$${(yoyChange/1e6).toFixed(1)}M`, sub: `+${yoyPct.toFixed(1)}%`, valueClass: 'negative' }
+                ],
+                table: { headers: ['Location', 'YoY Change', '%'], rows: biggest.map(l => [l.city, `+$${(l.yoyChange/1e6).toFixed(2)}M`, `+${l.yoyPct.toFixed(1)}%`]) },
+                suggestions: ['Highest cost increase', 'Under budget locations']
+            };
+        }
+        // Cost per employee
+        else if (q.includes('cost per employee') || q.includes('cost/employee')) {
+            const sorted = [...locations].sort((a,b) => b.costPerEmployee - a.costPerEmployee);
+            const avgCPE = locations.reduce((s,l) => s + l.forecast, 0) / locations.reduce((s,l) => s + l.headcount, 0);
+            response = {
+                answer: `Average cost per employee is <span class="highlight">$${(avgCPE/1000).toFixed(1)}K</span>. Highest: ${sorted[0].city} at $${(sorted[0].costPerEmployee/1000).toFixed(1)}K.`,
+                cards: [
+                    { label: 'Avg Cost/Emp', value: `$${(avgCPE/1000).toFixed(1)}K`, sub: 'Portfolio' },
+                    { label: 'Highest', value: sorted[0].city, sub: `$${(sorted[0].costPerEmployee/1000).toFixed(0)}K` },
+                    { label: 'Lowest', value: sorted[sorted.length-1].city, sub: `$${(sorted[sorted.length-1].costPerEmployee/1000).toFixed(0)}K` }
+                ],
+                table: { headers: ['Location', 'Cost/Employee', 'Headcount'], rows: sorted.slice(0,6).map(l => [l.city, `$${(l.costPerEmployee/1000).toFixed(1)}K`, l.headcount]) },
+                suggestions: ['Cost per sqft ranking', 'Headcount by region']
+            };
+        }
+        // Regional financials
+        else if (regionMatch && (q.includes('cost') || q.includes('budget') || q.includes('financial'))) {
+            const regionLocs = locations.filter(l => l.region.toLowerCase() === regionMatch);
+            const totalForecast = regionLocs.reduce((s,l) => s + l.forecast, 0);
+            const totalPlan = regionLocs.reduce((s,l) => s + l.plan, 0);
+            const variance = totalForecast - totalPlan;
+            response = {
+                answer: `<strong>${regionMatch.toUpperCase()}</strong> total costs: <span class="highlight">$${(totalForecast/1e6).toFixed(1)}M</span> with ${variance > 0 ? '<span class="negative">+' : '<span class="positive">'}$${(Math.abs(variance)/1e6).toFixed(1)}M</span> variance.`,
+                cards: [
+                    { label: 'Forecast', value: `$${(totalForecast/1e6).toFixed(1)}M`, sub: regionMatch.toUpperCase() },
+                    { label: 'Plan', value: `$${(totalPlan/1e6).toFixed(1)}M`, sub: 'Budget' },
+                    { label: 'Variance', value: `${variance > 0 ? '+' : ''}$${(variance/1e6).toFixed(1)}M`, sub: variance > 0 ? 'Over' : 'Under', valueClass: variance > 0 ? 'negative' : 'positive' },
+                    { label: 'Locations', value: regionLocs.length, sub: 'Offices' }
+                ],
+                suggestions: regionLocs.slice(0,3).map(l => `${l.city} details`)
+            };
+        }
+        // City details fallback
+        else if (cityMatch) {
+            const status = getBudgetStatus(cityMatch.variancePct);
+            response = {
+                answer: `<strong>${cityMatch.city}</strong> (${cityMatch.region}) - ${status.text}`,
+                cards: [
+                    { label: 'Total Cost', value: `$${(cityMatch.forecast/1e6).toFixed(2)}M`, sub: 'Forecast' },
+                    { label: 'Variance', value: `${cityMatch.variance > 0 ? '+' : ''}$${(cityMatch.variance/1e6).toFixed(2)}M`, sub: `${cityMatch.variancePct.toFixed(1)}%`, valueClass: cityMatch.variance > 0 ? 'negative' : 'positive' },
+                    { label: 'Cost/Emp', value: `$${(cityMatch.costPerEmployee/1000).toFixed(1)}K`, sub: `${cityMatch.headcount} employees` },
+                    { label: 'Cost/SqFt', value: `$${cityMatch.costPerSqft.toFixed(2)}`, sub: `${(cityMatch.sqft/1000).toFixed(0)}K sqft` }
+                ],
+                suggestions: [`Cost breakdown ${cityMatch.city}`, `Budget variance ${cityMatch.city}`, `${cityMatch.city} rent`]
+            };
+            selectLocation(cityMatch.id);
+        }
+        else {
+            response = {
+                answer: `Try asking about specific cities or metrics like "budget variance for Tokyo", "show over budget locations", or "total rent costs".`,
+                cards: [],
+                suggestions: ['Budget variance for Tokyo', 'Show over budget locations', 'Total rent costs', 'CAM costs', 'Cost per employee ranking']
+            };
+        }
+        
+        showAiResponse(response);
+    }
+    
+    function showAiResponse(response) {
+        let html = `<p>${response.answer}</p>`;
+        if (response.cards.length > 0) {
+            html += '<div class="ai-cards">';
+            response.cards.forEach(c => {
+                html += `<div class="ai-card"><div class="ai-card-label">${c.label}</div><div class="ai-card-value ${c.valueClass || ''}">${c.value}</div><div class="ai-card-sub">${c.sub || ''}</div></div>`;
+            });
+            html += '</div>';
+        }
+        if (response.table) {
+            html += `<table class="ai-table"><thead><tr>${response.table.headers.map(h => `<th>${h}</th>`).join('')}</tr></thead><tbody>`;
+            response.table.rows.forEach(row => { html += `<tr>${row.map((c,i) => `<td style="text-align:${i>0?'right':'left'}">${c}</td>`).join('')}</tr>`; });
+            html += '</tbody></table>';
+        }
+        if (response.suggestions.length > 0) {
+            html += '<div class="ai-suggestions">';
+            response.suggestions.forEach(s => { html += `<div class="ai-suggestion" onclick="runQuery('${s}')">${s}</div>`; });
+            html += '</div>';
+        }
+        document.getElementById('aiAnswer').innerHTML = html;
+        document.getElementById('aiResponse').classList.add('active');
+    }
+    
+    function closeAiResponse() { document.getElementById('aiResponse').classList.remove('active'); }
+    
+    function showSidebarTab(tab) {
+        document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+        document.querySelector(`[onclick="showSidebarTab('${tab}')"]`).classList.add('active');
+        ['details', 'finance', 'list'].forEach(t => {
+            document.getElementById(t + '-tab').style.display = t === tab ? 'block' : 'none';
+        });
+    }
+    
+    function populateLocationList() {
+        const list = document.getElementById('location-list');
+        const sorted = [...locations].sort((a,b) => b.variancePct - a.variancePct);
+        list.innerHTML = sorted.map(loc => {
+            const status = getBudgetStatus(loc.variancePct);
+            return `<div class="location-item" data-id="${loc.id}" onclick="selectLocation(${loc.id})"><div class="location-dot" style="background:${status.color}"></div><div class="location-info"><div class="location-name">${loc.city}</div><div class="location-region">${loc.region}</div></div><div class="location-rate" style="color:${status.color}">${loc.variancePct > 0 ? '+' : ''}${loc.variancePct.toFixed(1)}%</div></div>`;
+        }).join('');
+    }
+    
+    function initFinanceTab() {
+        // Cost breakdown
+        const breakdown = document.getElementById('globalCostBreakdown');
+        const maxVal = Math.max(...globalFinancials.categories.map(c => c.forecast));
+        breakdown.innerHTML = globalFinancials.categories.map(c => {
+            const variance = c.forecast - c.plan;
+            const varClass = variance > 0 ? 'variance-over' : variance < -100000 ? 'variance-under' : 'variance-on';
+            return `<div class="fin-row"><div class="fin-cat">${c.name}</div><div class="fin-bar-container"><div class="fin-bar" style="width:${c.forecast/maxVal*100}%;background:${c.color}"></div></div><div class="fin-value">$${(c.forecast/1e6).toFixed(1)}M</div><div class="variance-indicator ${varClass}">${variance > 0 ? '+' : ''}${(variance/1e6).toFixed(1)}M</div></div>`;
+        }).join('');
+        
+        // Regional variance
+        const regions = ['APAC', 'Europe', 'US West', 'US East', 'US Central', 'Americas'];
+        const regVar = document.getElementById('regionalVariance');
+        regVar.innerHTML = regions.map(r => {
+            const locs = locations.filter(l => l.region === r);
+            const variance = locs.reduce((s,l) => s + l.variance, 0);
+            const varPct = variance / locs.reduce((s,l) => s + l.plan, 0) * 100;
+            const status = getBudgetStatus(varPct);
+            return `<div class="detail-row"><span class="detail-label">${r}</span><span class="detail-value" style="color:${status.color}">${variance > 0 ? '+' : ''}$${(variance/1e6).toFixed(1)}M (${varPct > 0 ? '+' : ''}${varPct.toFixed(1)}%)</span></div>`;
+        }).join('');
+        
+        // Trend chart
+        setTimeout(() => {
+            new Chart(document.getElementById('globalTrendChart'), {
+                type: 'line',
+                data: {
+                    labels: ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'],
+                    datasets: [
+                        { label: 'Actual', data: [15.2,15.4,15.8,16.1,16.0,16.3,16.5,16.4,16.8,16.9,17.1,17.4], borderColor: '#1d4ed8', tension: 0.3, pointRadius: 2 },
+                        { label: 'Plan', data: [15.0,15.2,15.4,15.6,15.8,16.0,16.2,16.4,16.6,16.8,17.0,17.2], borderColor: '#9ca3af', borderDash: [5,5], tension: 0.3, pointRadius: 0 }
+                    ]
+                },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: true, position: 'top', labels: { boxWidth: 8, font: { size: 9 } } } }, scales: { y: { ticks: { callback: v => '$' + v + 'M', font: { size: 9 } } }, x: { ticks: { font: { size: 9 } }, grid: { display: false } } } }
+            });
+        }, 100);
+    }
+    
+    function updateSiteDetails(loc) {
+        const budgetStatus = getBudgetStatus(loc.variancePct);
+        const attStatus = getAttendanceStatus(loc.rate);
+        const daysToExpiry = Math.ceil((new Date(loc.leaseEnd) - new Date()) / (1000*60*60*24));
+        
+        document.getElementById('site-content').innerHTML = `
+            <div class="site-header">
+                <div class="site-city">${loc.city}</div>
+                <div class="site-region">${loc.region}</div>
+                <div class="site-status status-${budgetStatus.class}">${budgetStatus.text}</div>
+            </div>
+            
+            <div class="section">
+                <div class="section-title">💰 Financial Summary</div>
+                <div class="metrics-grid">
+                    <div class="metric"><div class="metric-label">Forecast</div><div class="metric-value">$${(loc.forecast/1e6).toFixed(2)}M</div><div class="metric-sub">FY25</div></div>
+                    <div class="metric"><div class="metric-label">Plan</div><div class="metric-value">$${(loc.plan/1e6).toFixed(2)}M</div><div class="metric-sub">Budget</div></div>
+                    <div class="metric"><div class="metric-label">Variance</div><div class="metric-value" style="color:${budgetStatus.color}">${loc.variance > 0 ? '+' : ''}$${(loc.variance/1e6).toFixed(2)}M</div><div class="metric-change ${loc.variance > 0 ? 'down' : 'up'}">${loc.variancePct > 0 ? '+' : ''}${loc.variancePct.toFixed(1)}%</div></div>
+                    <div class="metric"><div class="metric-label">Prior Year</div><div class="metric-value">$${(loc.priorYear/1e6).toFixed(2)}M</div><div class="metric-change ${loc.yoyPct > 3 ? 'down' : 'up'}">${loc.yoyPct > 0 ? '+' : ''}${loc.yoyPct.toFixed(1)}% YoY</div></div>
+                </div>
+            </div>
+            
+            <div class="section">
+                <div class="section-title">📊 Cost Breakdown</div>
+                <div class="fin-breakdown">
+                    <div class="fin-row"><div class="fin-cat">Rent</div><div class="fin-bar-container"><div class="fin-bar" style="width:${loc.rent/loc.forecast*100}%;background:#1d4ed8"></div></div><div class="fin-value">$${(loc.rent/1e6).toFixed(2)}M</div></div>
+                    <div class="fin-row"><div class="fin-cat">CAM</div><div class="fin-bar-container"><div class="fin-bar" style="width:${loc.cam/loc.forecast*100*5}%;background:#0891b2"></div></div><div class="fin-value">$${(loc.cam/1e3).toFixed(0)}K</div></div>
+                    <div class="fin-row"><div class="fin-cat">Tax</div><div class="fin-bar-container"><div class="fin-bar" style="width:${loc.tax/loc.forecast*100*5}%;background:#7c3aed"></div></div><div class="fin-value">$${(loc.tax/1e3).toFixed(0)}K</div></div>
+                    <div class="fin-row"><div class="fin-cat">Parking</div><div class="fin-bar-container"><div class="fin-bar" style="width:${loc.parking/loc.forecast*100*5}%;background:#059669"></div></div><div class="fin-value">$${(loc.parking/1e3).toFixed(0)}K</div></div>
+                    <div class="fin-row"><div class="fin-cat">Other</div><div class="fin-bar-container"><div class="fin-bar" style="width:${loc.other/loc.forecast*100*5}%;background:#6b7280"></div></div><div class="fin-value">$${(loc.other/1e3).toFixed(0)}K</div></div>
+                </div>
+            </div>
+            
+            <div class="section">
+                <div class="section-title">📈 Efficiency Metrics</div>
+                <div class="detail-row"><span class="detail-label">Cost per Employee</span><span class="detail-value">$${(loc.costPerEmployee/1000).toFixed(1)}K</span></div>
+                <div class="detail-row"><span class="detail-label">Cost per Sq Ft</span><span class="detail-value">$${loc.costPerSqft.toFixed(2)}</span></div>
+                <div class="detail-row"><span class="detail-label">Sq Ft per Employee</span><span class="detail-value">${(loc.sqft/loc.headcount).toFixed(0)}</span></div>
+            </div>
+            
+            <div class="section">
+                <div class="section-title">👥 Workplace</div>
+                <div class="metrics-grid">
+                    <div class="metric"><div class="metric-label">Headcount</div><div class="metric-value">${loc.headcount}</div></div>
+                    <div class="metric"><div class="metric-label">Attendance</div><div class="metric-value" style="color:${attStatus.color}">${loc.rate}%</div><div class="metric-sub">${attStatus.text}</div></div>
+                    <div class="metric"><div class="metric-label">Sq Ft</div><div class="metric-value">${(loc.sqft/1000).toFixed(0)}K</div></div>
+                    <div class="metric"><div class="metric-label">Food/Head</div><div class="metric-value">$${loc.food.toFixed(2)}</div><div class="metric-sub">Per day</div></div>
+                </div>
+            </div>
+            
+            <div class="section">
+                <div class="section-title">📅 Lease</div>
+                <div class="detail-row"><span class="detail-label">Expiration</span><span class="detail-value">${loc.leaseEnd}</span></div>
+                <div class="detail-row"><span class="detail-label">Days Left</span><span class="detail-value"><span class="pill ${daysToExpiry < 90 ? 'pill-red' : daysToExpiry < 180 ? 'pill-amber' : 'pill-blue'}">${daysToExpiry} days</span></span></div>
+            </div>
+        `;
+    }
+    </script>
+</body>
+</html>
